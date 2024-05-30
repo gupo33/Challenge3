@@ -36,7 +36,8 @@ int main(int argc, char* argv[]){
     DataStructure U;
     DataStructure Unew;
 
-    t_start = std::chrono::high_resolution_clock::now();
+    if(rank == 0)
+        t_start = std::chrono::high_resolution_clock::now();
 
     //generate each local matrix (assuming that the size is compatible with the number of processors)
 
@@ -228,7 +229,10 @@ int main(int argc, char* argv[]){
 
         //compute errors
 
-        MPI_Reduce(MPI_IN_PLACE,&error,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
+        if(rank != 0)
+            MPI_Reduce(&error,&error,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
+        else
+            MPI_Reduce(MPI_IN_PLACE,&error,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
         if(rank == 0){
             error *= h;
             error = std::sqrt(error);
@@ -260,7 +264,8 @@ int main(int argc, char* argv[]){
         }
     #endif
 
-    std::cout << "Elapsed time is " << (t_end-t_start).count()*1E-9 << " seconds\n";
+    if(rank == 0)
+        std::cout << "Elapsed time is " << (t_end-t_start).count()*1E-9 << " seconds\n";
 
     MPI_Finalize();
 
