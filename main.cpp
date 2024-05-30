@@ -17,7 +17,7 @@ int main(int argc, char* argv[]){
     double a = -1;
     double b = 1;
     double h = (b-a)/((double)(npoints-1));
-    double tol = 0.0001;
+    double tol = 0.000001;
 
     auto f = [](double x,double y){return 8*M_PI*M_PI*std::sin(2*M_PI*x)*std::sin(2*M_PI*y);};
     double bc = 5;
@@ -75,6 +75,8 @@ int main(int argc, char* argv[]){
         }
     }
 
+    /*
+
     #ifdef DEBUG
         MPI_Barrier(MPI_COMM_WORLD);
         for(int i = 0; i<size;++i){
@@ -95,36 +97,9 @@ int main(int argc, char* argv[]){
         }
     #endif
 
-    //commence
-
-    /*
-
-    double error = tol+1;
-
-    while(k < maxit && error > tol){
-
-        //update matrix
-        for(int i = 0;i<npoints-1;++i){
-            for(int j=1;j<npoints-1;++j){
-                Unew[i][j] = 0.25 * (U[i-1][j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
-            }
-        }
-
-        //compute error
-        error = 0;
-        for(int i = 1;i<npoints-1;++i){
-            for(int j=1;j<npoints-1;++j){
-                error += (U[i][j] - Unew[i][j]) * (U[i][j] - Unew[i][j]);
-            }
-        }
-        error *= h;
-        error = std::sqrt(error);
-
-        U.swap(Unew);
-        k++;
-    }
-
     */
+
+    //commence
 
     //to properly update the elements at the edges of each local U, we must store the top row from the next process
     //and the bottom row from the previous process, when necessary
@@ -176,67 +151,66 @@ int main(int argc, char* argv[]){
             #endif
         }
 
-        //update each local matrix while local convergence is not reached
+        //update each local matrix 
 
-        if(!local_conv){
-            if(rank > 0 && rank < size-1){
-                for(int i = 0;i<nrows;++i){
-                    for(int j=1;j<ncols-1;++j){
-                        if(i-1 < 0){
-                            Unew[i][j] = 0.25 * (upper[j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
+        if(rank > 0 && rank < size-1){
+            for(int i = 0;i<nrows;++i){
+                for(int j=1;j<ncols-1;++j){
+                    if(i-1 < 0){
+                        Unew[i][j] = 0.25 * (upper[j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
+                    }
+                    else{
+                        if(i+1>=nrows){
+                            Unew[i][j] = 0.25 * (U[i-1][j] + lower[j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
                         }
                         else{
-                            if(i+1>=nrows){
-                                Unew[i][j] = 0.25 * (U[i-1][j] + lower[j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
-                            }
-                            else{
-                            Unew[i][j] = 0.25 * (U[i-1][j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
-                            }
+                        Unew[i][j] = 0.25 * (U[i-1][j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
+                        }
+                    }
+                    error += (U[i][j] - Unew[i][j]) * (U[i][j] - Unew[i][j]);
+                }
+            }
+        }
+        else{
+            if(rank == 0){ //don't update first row
+                for(int i = 1;i<nrows;++i){
+                    for(int j=1;j<ncols-1;++j){
+                        if(i+1>=nrows){
+                            Unew[i][j] = 0.25 * (U[i-1][j] + lower[j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
+                        }
+                        else{
+                        Unew[i][j] = 0.25 * (U[i-1][j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
                         }
                         error += (U[i][j] - Unew[i][j]) * (U[i][j] - Unew[i][j]);
                     }
                 }
             }
-            else{
-                if(rank == 0){ //don't update first row
-                    for(int i = 1;i<nrows;++i){
-                        for(int j=1;j<ncols-1;++j){
-                            if(i+1>=nrows){
-                                Unew[i][j] = 0.25 * (U[i-1][j] + lower[j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
-                            }
-                            else{
+            else{ //don't update last row
+                for(int i = 0;i<nrows-1;++i){
+                    for(int j=1;j<ncols-1;++j){
+                        if(i-1 < 0){
+                            Unew[i][j] = 0.25 * (upper[j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
+                        }
+                        else{
                             Unew[i][j] = 0.25 * (U[i-1][j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
-                            }
-                            error += (U[i][j] - Unew[i][j]) * (U[i][j] - Unew[i][j]);
                         }
-                    }
-                }
-                else{ //don't update last row
-                    for(int i = 0;i<nrows-1;++i){
-                        for(int j=1;j<ncols-1;++j){
-                            if(i-1 < 0){
-                                Unew[i][j] = 0.25 * (upper[j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
-                            }
-                            else{
-                                Unew[i][j] = 0.25 * (U[i-1][j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
-                            }
-                            error += (U[i][j] - Unew[i][j]) * (U[i][j] - Unew[i][j]);
-                        }
+                        error += (U[i][j] - Unew[i][j]) * (U[i][j] - Unew[i][j]);
                     }
                 }
             }
         }
+        
 
         U.swap(Unew);
 
-        //compute errors for each rank
+        //compute errors and check for convergence in each rank
 
         error *= h;
         error = std::sqrt(error);
 
         local_conv = error <= tol;
 
-        MPI_Allreduce(&local_conv,&global_conv,1,MPI_CXX_BOOL,MPI_LAND,MPI_COMM_WORLD);
+        MPI_Allreduce(&local_conv,&global_conv,1,MPI_CXX_BOOL,MPI_LAND,MPI_COMM_WORLD); //check for global convergence
 
         #ifdef DEBUG
             std::cout << "error for rank " << rank << " is " << error << "," << "local convergence is " << local_conv << std::endl;
@@ -248,6 +222,8 @@ int main(int argc, char* argv[]){
     }
 
     t_end = std::chrono::high_resolution_clock::now();
+
+    /*
 
     #ifdef DEBUG
         for(int i = 0; i<size;++i){
@@ -267,6 +243,8 @@ int main(int argc, char* argv[]){
             std::cout << "Finished computing solution in points" << std::endl;
         }
     #endif
+
+    */
 
     if(rank == 0)
         std::cout << "Elapsed time is " << (t_end-t_start).count()*1E-9 << " seconds\n";
