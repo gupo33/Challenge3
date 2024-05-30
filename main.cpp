@@ -17,7 +17,7 @@ int main(int argc, char* argv[]){
     double a = -1;
     double b = 1;
     double h = (b-a)/((double)(npoints-1));
-    double tol = 0.000001;
+    double tol = 0.0001;
 
     auto f = [](double x,double y){return 8*M_PI*M_PI*std::sin(2*M_PI*x)*std::sin(2*M_PI*y);};
     double bc = 5;
@@ -134,7 +134,10 @@ int main(int argc, char* argv[]){
 
     double error = tol+1;
 
-    while(k < maxit && error > tol){
+    bool global_conv = false; //convergence for all processes
+    bool local_conv = false; //convergence for each process
+
+    while(k < maxit && !global_conv){
 
         MPI_Barrier(MPI_COMM_WORLD);
 
@@ -142,12 +145,9 @@ int main(int argc, char* argv[]){
 
         error = 0;
 
-    
-        //ok, so:
         //everyone but the last rank should send the last to the next
         //everyone but the first rank should send the first to the previous
 
-        //then:
         //everyone but the first rank should receive upper from previous
         //everyone but the last rank should receive lower from next
         if(rank!=0){
@@ -176,70 +176,74 @@ int main(int argc, char* argv[]){
             #endif
         }
 
-        //update matrix
+        //update each local matrix while local convergence is not reached
 
-        if(rank > 0 && rank < size-1){
-            for(int i = 0;i<nrows;++i){
-                for(int j=1;j<ncols-1;++j){
-                    if(i-1 < 0){
-                        Unew[i][j] = 0.25 * (upper[j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
-                    }
-                    else{
-                        if(i+1>=nrows){
-                            Unew[i][j] = 0.25 * (U[i-1][j] + lower[j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
-                        }
-                        else{
-                        Unew[i][j] = 0.25 * (U[i-1][j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
-                        }
-                    }
-                    error += (U[i][j] - Unew[i][j]) * (U[i][j] - Unew[i][j]);
-                }
-            }
-        }
-        else{
-            if(rank == 0){ //don't update first row
-                for(int i = 1;i<nrows;++i){
-                    for(int j=1;j<ncols-1;++j){
-                        if(i+1>=nrows){
-                            Unew[i][j] = 0.25 * (U[i-1][j] + lower[j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
-                        }
-                        else{
-                        Unew[i][j] = 0.25 * (U[i-1][j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
-                        }
-                        error += (U[i][j] - Unew[i][j]) * (U[i][j] - Unew[i][j]);
-                    }
-                }
-            }
-            else{ //don't update last row
-                for(int i = 0;i<nrows-1;++i){
+        if(!local_conv){
+            if(rank > 0 && rank < size-1){
+                for(int i = 0;i<nrows;++i){
                     for(int j=1;j<ncols-1;++j){
                         if(i-1 < 0){
                             Unew[i][j] = 0.25 * (upper[j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
                         }
                         else{
+                            if(i+1>=nrows){
+                                Unew[i][j] = 0.25 * (U[i-1][j] + lower[j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
+                            }
+                            else{
                             Unew[i][j] = 0.25 * (U[i-1][j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
+                            }
                         }
                         error += (U[i][j] - Unew[i][j]) * (U[i][j] - Unew[i][j]);
                     }
                 }
             }
+            else{
+                if(rank == 0){ //don't update first row
+                    for(int i = 1;i<nrows;++i){
+                        for(int j=1;j<ncols-1;++j){
+                            if(i+1>=nrows){
+                                Unew[i][j] = 0.25 * (U[i-1][j] + lower[j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
+                            }
+                            else{
+                            Unew[i][j] = 0.25 * (U[i-1][j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
+                            }
+                            error += (U[i][j] - Unew[i][j]) * (U[i][j] - Unew[i][j]);
+                        }
+                    }
+                }
+                else{ //don't update last row
+                    for(int i = 0;i<nrows-1;++i){
+                        for(int j=1;j<ncols-1;++j){
+                            if(i-1 < 0){
+                                Unew[i][j] = 0.25 * (upper[j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
+                            }
+                            else{
+                                Unew[i][j] = 0.25 * (U[i-1][j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
+                            }
+                            error += (U[i][j] - Unew[i][j]) * (U[i][j] - Unew[i][j]);
+                        }
+                    }
+                }
+            }
         }
-
-        MPI_Barrier(MPI_COMM_WORLD);
-
-        //compute errors
-
-        if(rank != 0)
-            MPI_Reduce(&error,&error,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
-        else
-            MPI_Reduce(MPI_IN_PLACE,&error,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
-        if(rank == 0){
-            error *= h;
-            error = std::sqrt(error);
-        }
-        MPI_Bcast(&error,1,MPI_DOUBLE,0,MPI_COMM_WORLD);
 
         U.swap(Unew);
+
+        //compute errors for each rank
+
+        error *= h;
+        error = std::sqrt(error);
+
+        local_conv = error <= tol;
+
+        MPI_Allreduce(&local_conv,&global_conv,1,MPI_CXX_BOOL,MPI_LAND,MPI_COMM_WORLD);
+
+        #ifdef DEBUG
+            std::cout << "error for rank " << rank << " is " << error << "," << "local convergence is " << local_conv << std::endl;
+            if(rank == 0){
+                std::cout << "global convergence is " << global_conv << std::endl;
+            }
+        #endif
         k++;
     }
 
