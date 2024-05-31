@@ -2,47 +2,31 @@
 #include <iostream>
 #include <cmath>
 #include <numbers>
-#include <chrono>
 #include <mpi.h>
+#include <functional>
 
-int main(int argc, char* argv[]){
+using fun_type = std::function<double(std::vector<double>)>;
 
-    MPI_Init(&argc, &argv);
+bool laplaceSolver(const unsigned max_it,const int a, const int b, const double tol, const unsigned npoints, const double bc, fun_type f){
 
-    //parameters for the method
+    double h = (b-a)/((double)(npoints-1)); //distance between each point of the grid
 
-    int k = 0;
-    int maxit = 1000;
-    int npoints = 20;
-    double a = -1;
-    double b = 1;
-    double h = (b-a)/((double)(npoints-1));
-    double tol = 0.000001;
-
-    auto f = [](double x,double y){return 8*M_PI*M_PI*std::sin(2*M_PI*x)*std::sin(2*M_PI*y);};
-    double bc = 5;
-
-    //parameters for parallel execution
+    unsigned k = 0; //number of iterations
 
     int rank,size;
 
     MPI_Comm_rank(MPI_COMM_WORLD,&rank);
     MPI_Comm_size (MPI_COMM_WORLD,&size);
 
-    static std::chrono::_V2::system_clock::time_point t_start, t_end;
-
     using DataStructure = std::vector<std::vector<double>>;
 
     DataStructure U;
     DataStructure Unew;
 
-    if(rank == 0)
-        t_start = std::chrono::high_resolution_clock::now();
-
     //generate each local matrix (assuming that the size is compatible with the number of processors)
 
-    int nrows = npoints / size;
-    int &ncols = npoints;
+    const unsigned nrows = npoints / size;
+    auto& ncols = npoints;
 
     for(int i = 0; i<nrows;++i){
         U.emplace_back(ncols);
@@ -107,12 +91,12 @@ int main(int argc, char* argv[]){
     std::vector<double> upper(ncols);
     std::vector<double> lower(ncols);
 
-    double error = tol+1;
+    double error = 0;
 
     bool global_conv = false; //convergence for all processes
     bool local_conv = false; //convergence for each process
 
-    while(k < maxit && !global_conv){
+    while(k < max_it && !global_conv){
 
         MPI_Barrier(MPI_COMM_WORLD);
 
@@ -157,14 +141,14 @@ int main(int argc, char* argv[]){
             for(int i = 0;i<nrows;++i){
                 for(int j=1;j<ncols-1;++j){
                     if(i-1 < 0){
-                        Unew[i][j] = 0.25 * (upper[j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
+                        Unew[i][j] = 0.25 * (upper[j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f({a+i*h,b+j*h}));
                     }
                     else{
                         if(i+1>=nrows){
-                            Unew[i][j] = 0.25 * (U[i-1][j] + lower[j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
+                            Unew[i][j] = 0.25 * (U[i-1][j] + lower[j] + U[i][j-1] + U[i][j+1] + h*h*f({a+i*h,b+j*h}));
                         }
                         else{
-                        Unew[i][j] = 0.25 * (U[i-1][j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
+                        Unew[i][j] = 0.25 * (U[i-1][j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f({a+i*h,b+j*h}));
                         }
                     }
                     error += (U[i][j] - Unew[i][j]) * (U[i][j] - Unew[i][j]);
@@ -176,10 +160,10 @@ int main(int argc, char* argv[]){
                 for(int i = 1;i<nrows;++i){
                     for(int j=1;j<ncols-1;++j){
                         if(i+1>=nrows){
-                            Unew[i][j] = 0.25 * (U[i-1][j] + lower[j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
+                            Unew[i][j] = 0.25 * (U[i-1][j] + lower[j] + U[i][j-1] + U[i][j+1] + h*h*f({a+i*h,b+j*h}));
                         }
                         else{
-                        Unew[i][j] = 0.25 * (U[i-1][j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
+                        Unew[i][j] = 0.25 * (U[i-1][j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f({a+i*h,b+j*h}));
                         }
                         error += (U[i][j] - Unew[i][j]) * (U[i][j] - Unew[i][j]);
                     }
@@ -189,10 +173,10 @@ int main(int argc, char* argv[]){
                 for(int i = 0;i<nrows-1;++i){
                     for(int j=1;j<ncols-1;++j){
                         if(i-1 < 0){
-                            Unew[i][j] = 0.25 * (upper[j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
+                            Unew[i][j] = 0.25 * (upper[j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f({a+i*h,b+j*h}));
                         }
                         else{
-                            Unew[i][j] = 0.25 * (U[i-1][j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f(a+i*h,b+j*h));
+                            Unew[i][j] = 0.25 * (U[i-1][j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f({a+i*h,b+j*h}));
                         }
                         error += (U[i][j] - Unew[i][j]) * (U[i][j] - Unew[i][j]);
                     }
@@ -221,8 +205,6 @@ int main(int argc, char* argv[]){
         k++;
     }
 
-    t_end = std::chrono::high_resolution_clock::now();
-
     /*
 
     #ifdef DEBUG
@@ -246,11 +228,6 @@ int main(int argc, char* argv[]){
 
     */
 
-    if(rank == 0)
-        std::cout << "Elapsed time is " << (t_end-t_start).count()*1E-9 << " seconds\n";
-
-    MPI_Finalize();
-
-    return 0;
+    return global_conv;
 
 }
