@@ -1,4 +1,5 @@
 #include <vector>
+#include <map>
 #include <iostream>
 #include <cmath>
 #include <numbers>
@@ -18,7 +19,7 @@ bool laplaceSolver(const unsigned max_it,const int a, const int b, const double 
     MPI_Comm_rank(MPI_COMM_WORLD,&rank);
     MPI_Comm_size (MPI_COMM_WORLD,&size);
 
-    using DataStructure = std::vector<std::vector<double>>;
+    using DataStructure = std::map<unsigned,std::vector<double>>;
 
     DataStructure U;
     DataStructure Unew;
@@ -29,8 +30,8 @@ bool laplaceSolver(const unsigned max_it,const int a, const int b, const double 
     auto& ncols = npoints;
 
     for(int i = 0; i<nrows;++i){
-        U.emplace_back(ncols);
-        Unew.emplace_back(ncols);
+        U.emplace(i,std::vector<double>(ncols));
+        Unew.emplace(i,std::vector<double>(ncols));
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
@@ -67,8 +68,8 @@ bool laplaceSolver(const unsigned max_it,const int a, const int b, const double 
             if(rank == i){
                 std::cout<<"U in rank "<<rank<<std::endl;
                 for(auto vec : U){
-                    for(auto num : vec){
-                        std::cout << num << " ";
+                    for(int j=0;j<ncols;++j){
+                        std::cout << vec.second[j] << " ";
                     }
                     std::cout << std::endl;
                 }
@@ -82,8 +83,6 @@ bool laplaceSolver(const unsigned max_it,const int a, const int b, const double 
     #endif
 
     */
-
-    //commence
 
     //to properly update the elements at the edges of each local U, we must store the top row from the next process
     //and the bottom row from the previous process, when necessary

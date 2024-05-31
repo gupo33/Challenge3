@@ -1,4 +1,4 @@
-#include <vector>
+#include <array>
 #include <iostream>
 #include <fstream>
 #include <mpi.h>
@@ -27,7 +27,7 @@ int main(int argc, char* argv[]){
     double bc;
 
     std::string fun;
-    std::vector<std::string> vars{"x","y"};
+    std::array<std::string,2> vars{"x","y"};
 
     unsigned fun_size, vars_size;
 
@@ -67,7 +67,6 @@ int main(int argc, char* argv[]){
 
     if(rank!=0){
         fun.resize(fun_size);
-        vars.resize(vars_size);
     }
 
 
