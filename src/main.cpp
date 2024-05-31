@@ -112,6 +112,10 @@ int main(int argc, char* argv[]){
 
     laplaceSolver(max_it,a,b,tol,npoints,bc,muFun);
 
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    if(rank == 0) t_end = std::chrono::high_resolution_clock::now();
+
     //stop timer
 
     if(rank == 0) std::cout << "Elapsed time is " << (t_end-t_start).count()*1E-9 << " seconds\n";

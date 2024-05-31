@@ -5,8 +5,10 @@
 #include <numbers>
 #include <mpi.h>
 #include <functional>
+#include "writeVTK.hpp"
 
 using fun_type = std::function<double(std::vector<double>)>;
+using DataStructure = std::map<unsigned,std::vector<double>>;
 
 bool laplaceSolver(const unsigned max_it,const int a, const int b, const double tol, const unsigned npoints, const double bc, fun_type f){
 
@@ -18,8 +20,6 @@ bool laplaceSolver(const unsigned max_it,const int a, const int b, const double 
 
     MPI_Comm_rank(MPI_COMM_WORLD,&rank);
     MPI_Comm_size (MPI_COMM_WORLD,&size);
-
-    using DataStructure = std::map<unsigned,std::vector<double>>;
 
     DataStructure U;
     DataStructure Unew;
@@ -199,6 +199,7 @@ bool laplaceSolver(const unsigned max_it,const int a, const int b, const double 
             std::cout << "error for rank " << rank << " is " << error << "," << "local convergence is " << local_conv << std::endl;
             if(rank == 0){
                 std::cout << "global convergence is " << global_conv << std::endl;
+                if(global_conv) std::cout << "iterations: "<< k << std::endl;
             }
         #endif
         k++;
@@ -226,6 +227,85 @@ bool laplaceSolver(const unsigned max_it,const int a, const int b, const double 
     #endif
 
     */
+
+    //gather the results in vector of vectors rank zero to write the VTK file
+
+    /*
+
+    //first, turn the map into a vector of vectors
+
+    std::vector<std::vector<double>> U_vect;
+
+    int i = 0;
+
+    if(rank == 0){ 
+        U_vect.resize(npoints);
+        for(auto vec : U_vect){
+            vec.resize(npoints);
+            i+=vec.size();
+            #ifdef DEBUG
+                std::cout << "element "<<i<<"is here"<<std::endl;
+            #endif
+        }
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    #ifdef DEBUG
+        if(rank == 0){
+            std::cout << "started gathering" << std::endl;
+        }   
+    #endif
+
+    for(int i = 0; i<size;++i){
+        for(int j = 0; j<nrows;++j){
+            if(rank == i){
+                MPI_Send(U[j].data(),ncols,MPI_DOUBLE,0,i*nrows+j,MPI_COMM_WORLD);
+                #ifdef DEBUG
+                    if(rank == 0) std::cout << "sending row " << i*nrows + j << std::endl;
+                #endif
+            }
+            MPI_Barrier(MPI_COMM_WORLD);
+            if(rank == 0){
+                MPI_Recv(U[i*nrows+j].data(),ncols,MPI_DOUBLE,i,i*nrows+j,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+                #ifdef DEBUG
+                    if(rank == 0) std::cout << "receiving row " << i*nrows + j << std::endl;
+                #endif
+            }
+            MPI_Barrier(MPI_COMM_WORLD);
+
+        }
+    }
+
+    #ifdef DEBUG
+        if(rank == 0){
+            std::cout << "finished gathering" << std::endl;
+            for(auto vec: U_vect){
+                for(auto )
+            }
+        }
+    #endif
+
+    */
+
+   //.vtk files are written column-by-column, which is a mess
+   //so: for each column, I iterate over all ranks until the column is fully populated
+   //then, we go to the next column 
+
+    for(int col_idx = 0; col_idx < ncols; ++col_idx){
+        for(int i = 0; i<size;++i){
+            if(rank == i){
+                std::string filename = "results";
+                filename.append(std::to_string(i));
+                filename.append(".vtk");
+                generateVTKFile("results.vtk", U, nrows,ncols,col_idx, h, h);
+                #ifdef DEBUG
+                    std::cout << "rank " <<i<< "is populating column"<<col_idx<<std::endl;
+                #endif
+            }
+            MPI_Barrier(MPI_COMM_WORLD); 
+        }
+    }
 
     return global_conv;
 

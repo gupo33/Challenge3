@@ -1,5 +1,5 @@
-debug: src/main.cpp include/laplaceSolver.hpp
-	mpic++ -o main src/main.cpp include/laplaceSolver.hpp -Iinclude -Llib -lmuparserx -g -std=c++20 -DDEBUG
+debug: src/main.cpp include/laplaceSolver.hpp include/writeVTK.hpp
+	mpic++ -o main src/main.cpp include/laplaceSolver.hpp include/writeVTK.hpp -Iinclude -Llib -lmuparserx -g -std=c++20 -DDEBUG
 
-release: src/main.cpp include/laplaceSolver.hpp
-	mpic++ -o main src/main.cpp include/laplaceSolver.hpp -Iinclude -Llib -lmuparserx -g -std=c++20
+release: src/main.cpp include/laplaceSolver.hpp include/writeVTK.hpp
+	mpic++ -o main src/main.cpp include/laplaceSolver.hpp include/writeVTK.hpp -Iinclude -Llib -lmuparserx -g -std=c++20 

@@ -2,8 +2,8 @@
     "max_it": 1000,
     "a": -1,
     "b": 1,
-    "tol": 0.000001,
-    "npoints": 20,
+    "tol": 0.001,
+    "npoints": 120,
     "bc": 0,
     "fun":"8*pi*pi*sin(2*pi*x)*sin(2*pi*y)"
 }
