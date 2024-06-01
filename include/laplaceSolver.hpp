@@ -34,8 +34,6 @@ bool laplaceSolver(const unsigned max_it,const int a, const int b, const double 
         Unew.emplace(i,std::vector<double>(ncols));
     }
 
-    MPI_Barrier(MPI_COMM_WORLD);
-
     //impose boundary conditions
 
     for(int i = 0;i<nrows;++i){
@@ -90,7 +88,7 @@ bool laplaceSolver(const unsigned max_it,const int a, const int b, const double 
     std::vector<double> upper(ncols);
     std::vector<double> lower(ncols);
 
-    double error = 0;
+    double error = 0; //error for each rank
 
     bool global_conv = false; //convergence for all processes
     bool local_conv = false; //convergence for each process
@@ -193,6 +191,8 @@ bool laplaceSolver(const unsigned max_it,const int a, const int b, const double 
 
         local_conv = error <= tol;
 
+        MPI_Barrier(MPI_COMM_WORLD);
+
         MPI_Allreduce(&local_conv,&global_conv,1,MPI_CXX_BOOL,MPI_LAND,MPI_COMM_WORLD); //check for global convergence
 
         #ifdef DEBUG
@@ -288,24 +288,19 @@ bool laplaceSolver(const unsigned max_it,const int a, const int b, const double 
 
     */
 
-   //.vtk files are written column-by-column, which is a mess
-   //so: for each column, I iterate over all ranks until the column is fully populated
-   //then, we go to the next column 
+   //populate VTK file in order of rank
 
-    for(int col_idx = 0; col_idx < ncols; ++col_idx){
-        for(int i = 0; i<size;++i){
-            if(rank == i){
-                std::string filename = "results";
-                filename.append(std::to_string(i));
-                filename.append(".vtk");
-                generateVTKFile("results.vtk", U, nrows,ncols,col_idx, h, h);
-                #ifdef DEBUG
-                    std::cout << "rank " <<i<< "is populating column"<<col_idx<<std::endl;
-                #endif
-            }
-            MPI_Barrier(MPI_COMM_WORLD); 
+   for(int i = 0; i<size;++i){
+        if(rank == i){
+            #ifdef DEBUG
+                std::cout << "rank "<<i<<"is populating the vtk fike"<<std::endl;
+            #endif
+            generateVTKFile("results.vtk",U,ncols,nrows,h);
         }
-    }
+        MPI_Barrier(MPI_COMM_WORLD);
+   }
+
+
 
     return global_conv;
 

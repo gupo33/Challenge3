@@ -8,10 +8,12 @@
 #include <map>
 #include <mpi.h>
 
+static bool firstAccess = true;
+
 // generates a STRUCTURES VTK file with a scalar field
 void generateVTKFile(const std::string & filename, 
                      const std::map<unsigned, std::vector<double>> & scalarField, 
-                     int nx, int ny, int col_idx, double hx, double hy) {
+                     int num_cols, int num_rows, double h) {
 
     int rank,size;
 
@@ -20,7 +22,7 @@ void generateVTKFile(const std::string & filename,
 
     std::ofstream vtkFile;
 
-    if(rank == 0 && col_idx == 0){ //when first accessing the file, overwrite it
+    if(rank == 0 && firstAccess){ //when first accessing the file, overwrite it
         vtkFile.open(filename);
     }
     else{ //when accessing it later, append
@@ -35,7 +37,9 @@ void generateVTKFile(const std::string & filename,
 
     //first rank should write the header when it first writes to the file
 
-    if(rank == 0 && col_idx == 0){
+    if(rank == 0 && firstAccess){
+
+        firstAccess = false;
 
         // Write VTK header
         vtkFile <<  "# vtk DataFile Version 3.0\n";
@@ -45,10 +49,10 @@ void generateVTKFile(const std::string & filename,
 
         // Write grid data
         vtkFile << "DATASET STRUCTURED_POINTS\n";                             // format of the dataset
-        vtkFile << "DIMENSIONS " << nx*size << " " << ny << " " << 1 << "\n";  // number of points in each direction
+        vtkFile << "DIMENSIONS " << num_cols << " " << num_cols << " " << 1 << "\n";  // number of points in each direction
         vtkFile << "ORIGIN 0 0 0\n";                                          // lower-left corner of the structured grid
-        vtkFile << "SPACING" << " " << hx << " " << hy << " " << 1 << "\n";   // spacing between points in each direction
-        vtkFile << "POINT_DATA " << (nx*size) * (ny) << "\n";                  // number of points
+        vtkFile << "SPACING" << " " << h << " " << h << " " << 1 << "\n";   // spacing between points in each direction
+        vtkFile << "POINT_DATA " << (num_cols) * (num_cols) << "\n";                  // number of points
                                                                     
         
         // Write scalar field data
@@ -58,13 +62,12 @@ void generateVTKFile(const std::string & filename,
     }
 
     // Write vector field data
-    for (int i = 0; i < nx; i++) {
-        vtkFile <<  scalarField.at(i)[col_idx] << "\n";
-        #ifdef DEBUG
-            std::cout << "wrote item in position ("<<i<<","<<col_idx<<")"<< std::endl;
-        #endif
+    for (int i = 0; i < num_rows; ++i) {
+        for(int j = 0; j<num_cols; ++j){
+            vtkFile << scalarField.at(i)[j] << " ";
+        }
+        vtkFile << "\n";
     }
-
 }
 
 #endif // WRITEVTK_HPP
