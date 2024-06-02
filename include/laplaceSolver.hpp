@@ -132,38 +132,47 @@ bool laplaceSolver(const unsigned max_it,const double a, const double b, const d
             #endif
         }
 
+        #ifdef DEBUG
+            if(rank == 0) std::cout << "Starting matrix computation" << std::endl;
+        #endif
+
         //update interior of local matrix
 
-        for(unsigned i = 1;i<nrows-1;++i){
+        if(nrows == 1){
             for(unsigned j = 1;j<ncols-1;++j){
-                Unew[i][j] = 0.25 * (U[i-1][j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f({a+i*h,b+j*h}));
-                error += (U[i][j] - Unew[i][j]) * (U[i][j] - Unew[i][j]);
-            }
-        }
-
-        if(rank > 0 && rank < size-1){
-            for(unsigned j =1;j<ncols-1;++j){
-                Unew[0][j] = 0.25*(upper[j]+ U[1][j] + U[0][j-1] + U[0][j+1] + h*h*f({a,b+j*h}));
-                Unew[nrows-1][j] = 0.25 * (U[nrows-2][j] + lower[j] + U[nrows-1][j-1] + U[nrows-1][j+1] + h*h*f({a+(nrows-1)*h,b+j*h}));
-                error += (U[0][j] - Unew[0][j]) * (U[0][j] - Unew[0][j]) + (U[nrows-1][j] - Unew[nrows-1][j]) * (U[nrows-1][j] - Unew[nrows-1][j]);
+                Unew[0][j] = 0.25 * (upper[j] + lower[j] + U[0][j-1] + U[0][j+1] + h*h*f({a+rank*nrows*h,b+j*h}));
+                error += (U[0][j] - Unew[0][j]) * (U[0][j] - Unew[0][j]);
             }
         }
         else{
-            if(rank == 0){
+            for(unsigned i = 1;i<nrows-1;++i){ //update interior of the matrix
+                for(unsigned j = 1;j<ncols-1;++j){
+                    Unew[i][j] = 0.25 * (U[i-1][j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f({a+(i+rank*nrows)*h,b+j*h}));
+                    error += (U[i][j] - Unew[i][j]) * (U[i][j] - Unew[i][j]);
+                }
+            }
+            if(rank > 0 && rank < size-1){ //update both first and last row if we're not at the first or last rank
                 for(unsigned j =1;j<ncols-1;++j){
-                    Unew[nrows-1][j] = 0.25 * (U[nrows-2][j] + lower[j] + U[nrows-1][j-1] + U[nrows-1][j+1] + h*h*f({a+(nrows-1)*h,b+j*h}));
-                    error += (U[nrows-1][j] - Unew[nrows-1][j]) * (U[nrows-1][j] - Unew[nrows-1][j]);
+                    Unew[0][j] = 0.25*(upper[j]+ U[1][j] + U[0][j-1] + U[0][j+1] + h*h*f({a,b+j*h}));
+                    Unew[nrows-1][j] = 0.25 * (U[nrows-2][j] + lower[j] + U[nrows-1][j-1] + U[nrows-1][j+1] + h*h*f({a+(rank*nrows + nrows-1)*h,b+j*h}));
+                    error += (U[0][j] - Unew[0][j]) * (U[0][j] - Unew[0][j]) + (U[nrows-1][j] - Unew[nrows-1][j]) * (U[nrows-1][j] - Unew[nrows-1][j]);
                 }
             }
             else{
-                for(unsigned j =1;j<ncols-1;++j){
-                    Unew[0][j] = 0.25*(upper[j]+ U[1][j] + U[0][j-1] + U[0][j+1] + h*h*f({(double)a,b+j*h}));
-                    error += (U[0][j] - Unew[0][j]) * (U[0][j] - Unew[0][j]);
+                if(rank == 0){ //first rank only updates last row
+                    for(unsigned j =1;j<ncols-1;++j){
+                        Unew[nrows-1][j] = 0.25 * (U[nrows-2][j] + lower[j] + U[nrows-1][j-1] + U[nrows-1][j+1] + h*h*f({a+(rank*nrows + nrows-1)*h,b+j*h}));
+                        error += (U[nrows-1][j] - Unew[nrows-1][j]) * (U[nrows-1][j] - Unew[nrows-1][j]);
+                    }
+                }
+                else{ //last rank only updates first row
+                    for(unsigned j =1;j<ncols-1;++j){
+                        Unew[0][j] = 0.25*(upper[j]+ U[1][j] + U[0][j-1] + U[0][j+1] + h*h*f({a + rank*nrows,b+j*h}));
+                        error += (U[0][j] - Unew[0][j]) * (U[0][j] - Unew[0][j]);
+                    }
                 }
             }
         }
-
-        //TODO: implement case where nrows = 1!!!
 
         U.swap(Unew);
 
