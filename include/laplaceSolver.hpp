@@ -10,7 +10,7 @@
 using fun_type = std::function<double(std::vector<double>)>;
 using DataStructure = std::map<unsigned,std::vector<double>>;
 
-bool laplaceSolver(const unsigned max_it,const int a, const int b, const double tol, const unsigned npoints, const double bc, fun_type f){
+bool laplaceSolver(const unsigned max_it,const double a, const double b, const double tol, const unsigned npoints, const double bc, fun_type f){
 
     double h = (b-a)/((double)(npoints-1)); //distance between each point of the grid
 
@@ -29,14 +29,14 @@ bool laplaceSolver(const unsigned max_it,const int a, const int b, const double 
     const unsigned nrows = npoints / size;
     auto& ncols = npoints;
 
-    for(int i = 0; i<nrows;++i){
+    for(unsigned i = 0; i<nrows;++i){
         U.emplace(i,std::vector<double>(ncols));
         Unew.emplace(i,std::vector<double>(ncols));
     }
 
     //impose boundary conditions
 
-    for(int i = 0;i<nrows;++i){
+    for(unsigned i = 0;i<nrows;++i){
         U[i][0] = bc;
         U[i][ncols-1] = bc;
 
@@ -45,14 +45,14 @@ bool laplaceSolver(const unsigned max_it,const int a, const int b, const double 
     }
 
     if(rank == 0){
-        for(int i = 1; i<ncols-1;++i){
+        for(unsigned i = 1; i<ncols-1;++i){
             U[0][i] = bc;
             Unew[0][i] = bc;
         }
     }
 
     if(rank == size-1){
-        for(int i = 1; i<ncols-1;++i){
+        for(unsigned i = 1; i<ncols-1;++i){
             U[nrows-1][i] = bc;
             Unew[nrows-1][i] = bc;
         }
@@ -132,55 +132,38 @@ bool laplaceSolver(const unsigned max_it,const int a, const int b, const double 
             #endif
         }
 
-        //update each local matrix 
+        //update interior of local matrix
+
+        for(unsigned i = 1;i<nrows-1;++i){
+            for(unsigned j = 1;j<ncols-1;++j){
+                Unew[i][j] = 0.25 * (U[i-1][j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f({a+i*h,b+j*h}));
+                error += (U[i][j] - Unew[i][j]) * (U[i][j] - Unew[i][j]);
+            }
+        }
 
         if(rank > 0 && rank < size-1){
-            for(int i = 0;i<nrows;++i){
-                for(int j=1;j<ncols-1;++j){
-                    if(i-1 < 0){
-                        Unew[i][j] = 0.25 * (upper[j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f({a+i*h,b+j*h}));
-                    }
-                    else{
-                        if(i+1>=nrows){
-                            Unew[i][j] = 0.25 * (U[i-1][j] + lower[j] + U[i][j-1] + U[i][j+1] + h*h*f({a+i*h,b+j*h}));
-                        }
-                        else{
-                        Unew[i][j] = 0.25 * (U[i-1][j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f({a+i*h,b+j*h}));
-                        }
-                    }
-                    error += (U[i][j] - Unew[i][j]) * (U[i][j] - Unew[i][j]);
-                }
+            for(unsigned j =1;j<ncols-1;++j){
+                Unew[0][j] = 0.25*(upper[j]+ U[1][j] + U[0][j-1] + U[0][j+1] + h*h*f({a,b+j*h}));
+                Unew[nrows-1][j] = 0.25 * (U[nrows-2][j] + lower[j] + U[nrows-1][j-1] + U[nrows-1][j+1] + h*h*f({a+(nrows-1)*h,b+j*h}));
+                error += (U[0][j] - Unew[0][j]) * (U[0][j] - Unew[0][j]) + (U[nrows-1][j] - Unew[nrows-1][j]) * (U[nrows-1][j] - Unew[nrows-1][j]);
             }
         }
         else{
-            if(rank == 0){ //don't update first row
-                for(int i = 1;i<nrows;++i){
-                    for(int j=1;j<ncols-1;++j){
-                        if(i+1>=nrows){
-                            Unew[i][j] = 0.25 * (U[i-1][j] + lower[j] + U[i][j-1] + U[i][j+1] + h*h*f({a+i*h,b+j*h}));
-                        }
-                        else{
-                        Unew[i][j] = 0.25 * (U[i-1][j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f({a+i*h,b+j*h}));
-                        }
-                        error += (U[i][j] - Unew[i][j]) * (U[i][j] - Unew[i][j]);
-                    }
+            if(rank == 0){
+                for(unsigned j =1;j<ncols-1;++j){
+                    Unew[nrows-1][j] = 0.25 * (U[nrows-2][j] + lower[j] + U[nrows-1][j-1] + U[nrows-1][j+1] + h*h*f({a+(nrows-1)*h,b+j*h}));
+                    error += (U[nrows-1][j] - Unew[nrows-1][j]) * (U[nrows-1][j] - Unew[nrows-1][j]);
                 }
             }
-            else{ //don't update last row
-                for(int i = 0;i<nrows-1;++i){
-                    for(int j=1;j<ncols-1;++j){
-                        if(i-1 < 0){
-                            Unew[i][j] = 0.25 * (upper[j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f({a+i*h,b+j*h}));
-                        }
-                        else{
-                            Unew[i][j] = 0.25 * (U[i-1][j] + U[i+1][j] + U[i][j-1] + U[i][j+1] + h*h*f({a+i*h,b+j*h}));
-                        }
-                        error += (U[i][j] - Unew[i][j]) * (U[i][j] - Unew[i][j]);
-                    }
+            else{
+                for(unsigned j =1;j<ncols-1;++j){
+                    Unew[0][j] = 0.25*(upper[j]+ U[1][j] + U[0][j-1] + U[0][j+1] + h*h*f({(double)a,b+j*h}));
+                    error += (U[0][j] - Unew[0][j]) * (U[0][j] - Unew[0][j]);
                 }
             }
         }
-        
+
+        //TODO: implement case where nrows = 1!!!
 
         U.swap(Unew);
 
@@ -290,7 +273,7 @@ bool laplaceSolver(const unsigned max_it,const int a, const int b, const double 
 
    //populate VTK file in order of rank
 
-   for(int i = 0; i<size;++i){
+   for(unsigned i = 0; i<size;++i){
         if(rank == i){
             #ifdef DEBUG
                 std::cout << "rank "<<i<<"is populating the vtk fike"<<std::endl;
