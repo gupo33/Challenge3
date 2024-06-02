@@ -27,4 +27,4 @@
 
 main
 /.vscode
-results*
+*.vtk

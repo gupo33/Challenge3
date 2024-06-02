@@ -12,7 +12,7 @@ using DataStructure = std::map<unsigned,std::vector<double>>;
 
 bool laplaceSolver(const unsigned max_it,const double a, const double b, const double tol, const unsigned npoints, const double bc, fun_type f){
 
-    double h = (b-a)/((double)(npoints-1)); //distance between each point of the grid
+    const double h = (b-a)/((double)(npoints-1)); //distance between each point of the grid
 
     unsigned k = 0; //number of iterations
 
@@ -24,9 +24,21 @@ bool laplaceSolver(const unsigned max_it,const double a, const double b, const d
     DataStructure U;
     DataStructure Unew;
 
-    //generate each local matrix (assuming that the size is compatible with the number of processors)
+    //generate each local matrix
 
-    const unsigned nrows = npoints / size;
+    unsigned nrows = npoints / size;
+    unsigned remainder = npoints % size;
+
+    if(remainder != 0){ //if remainder is non-zero, add one row to each rank until we reach the desired number of elements
+        for(unsigned i = 0; i< size && remainder != 0; ++i){
+            if(rank == i){
+                ++nrows;
+            }
+            --remainder;
+            MPI_Barrier(MPI_COMM_WORLD);
+        }
+    }
+
     auto& ncols = npoints;
 
     for(unsigned i = 0; i<nrows;++i){
@@ -93,9 +105,9 @@ bool laplaceSolver(const unsigned max_it,const double a, const double b, const d
     bool global_conv = false; //convergence for all processes
     bool local_conv = false; //convergence for each process
 
-    while(k < max_it && !global_conv){
+    MPI_Barrier(MPI_COMM_WORLD);
 
-        MPI_Barrier(MPI_COMM_WORLD);
+    while(k < max_it && !global_conv){
 
         //reset error
 
@@ -136,9 +148,7 @@ bool laplaceSolver(const unsigned max_it,const double a, const double b, const d
             if(rank == 0) std::cout << "Starting matrix computation" << std::endl;
         #endif
 
-        //update interior of local matrix
-
-        if(nrows == 1){
+        if(nrows == 1){ //if each rank only holds one row, we need to update U with both upper and lower at the same time
             for(unsigned j = 1;j<ncols-1;++j){
                 Unew[0][j] = 0.25 * (upper[j] + lower[j] + U[0][j-1] + U[0][j+1] + h*h*f({a+rank*nrows*h,b+j*h}));
                 error += (U[0][j] - Unew[0][j]) * (U[0][j] - Unew[0][j]);
@@ -220,79 +230,17 @@ bool laplaceSolver(const unsigned max_it,const double a, const double b, const d
 
     */
 
-    //gather the results in vector of vectors rank zero to write the VTK file
+    //populate VTK file for solutions in order of rank
 
-    /*
-
-    //first, turn the map into a vector of vectors
-
-    std::vector<std::vector<double>> U_vect;
-
-    int i = 0;
-
-    if(rank == 0){ 
-        U_vect.resize(npoints);
-        for(auto vec : U_vect){
-            vec.resize(npoints);
-            i+=vec.size();
-            #ifdef DEBUG
-                std::cout << "element "<<i<<"is here"<<std::endl;
-            #endif
-        }
-    }
-
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    #ifdef DEBUG
-        if(rank == 0){
-            std::cout << "started gathering" << std::endl;
-        }   
-    #endif
-
-    for(int i = 0; i<size;++i){
-        for(int j = 0; j<nrows;++j){
+    for(unsigned i = 0; i<size;++i){
             if(rank == i){
-                MPI_Send(U[j].data(),ncols,MPI_DOUBLE,0,i*nrows+j,MPI_COMM_WORLD);
                 #ifdef DEBUG
-                    if(rank == 0) std::cout << "sending row " << i*nrows + j << std::endl;
+                    std::cout << "rank "<<i<<"is populating the vtk file"<<std::endl;
                 #endif
+                generateVTKFile("results.vtk",U,ncols,nrows,h);
             }
             MPI_Barrier(MPI_COMM_WORLD);
-            if(rank == 0){
-                MPI_Recv(U[i*nrows+j].data(),ncols,MPI_DOUBLE,i,i*nrows+j,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
-                #ifdef DEBUG
-                    if(rank == 0) std::cout << "receiving row " << i*nrows + j << std::endl;
-                #endif
-            }
-            MPI_Barrier(MPI_COMM_WORLD);
-
-        }
     }
-
-    #ifdef DEBUG
-        if(rank == 0){
-            std::cout << "finished gathering" << std::endl;
-            for(auto vec: U_vect){
-                for(auto )
-            }
-        }
-    #endif
-
-    */
-
-   //populate VTK file in order of rank
-
-   for(unsigned i = 0; i<size;++i){
-        if(rank == i){
-            #ifdef DEBUG
-                std::cout << "rank "<<i<<"is populating the vtk fike"<<std::endl;
-            #endif
-            generateVTKFile("results.vtk",U,ncols,nrows,h);
-        }
-        MPI_Barrier(MPI_COMM_WORLD);
-   }
-
-
 
     return global_conv;
 

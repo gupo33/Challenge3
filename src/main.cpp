@@ -51,7 +51,7 @@ int main(int argc, char* argv[]){
         fun_size = fun.size();
     }
 
-    //broadcast everything for all ranks
+    //broadcast everything for all ranks 
 
     MPI_Bcast(&max_it,1,MPI_INT,0,MPI_COMM_WORLD);
     MPI_Bcast(&a,1,MPI_DOUBLE,0,MPI_COMM_WORLD);
@@ -69,14 +69,13 @@ int main(int argc, char* argv[]){
         fun.resize(fun_size);
     }
 
-
     MPI_Bcast(fun.data(),fun.size(),MPI_CHAR,0,MPI_COMM_WORLD);
 
     #ifdef DEBUG
         std::cout << rank <<": "<<a<<" "<<b<<" "<<tol<<" "<<npoints<<" "<<bc<<" "<<fun<<" "<<vars[0]<<vars[1]<<std::endl;
     #endif
 
-    //every rank now creaters a muParser function and calls the method with the right parameters
+    //every rank now creates a muParser function and calls the method with the right parameters
 
     mup::ParserX p_fun; //initialize parser for function
 
@@ -114,9 +113,9 @@ int main(int argc, char* argv[]){
 
     MPI_Barrier(MPI_COMM_WORLD);
 
-    if(rank == 0) t_end = std::chrono::high_resolution_clock::now();
-
     //stop timer
+
+    if(rank == 0) t_end = std::chrono::high_resolution_clock::now();
 
     if(rank == 0) std::cout << "Elapsed time is " << (t_end-t_start).count()*1E-9 << " seconds\n";
 
