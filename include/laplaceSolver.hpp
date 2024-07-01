@@ -1,3 +1,4 @@
+//@note a header file should contain a header guard to avoid multiple inclusion o #pragma once 
 #include <vector>
 #include <map>
 #include <iostream>
@@ -9,10 +10,18 @@
 
 using fun_type = std::function<double(std::vector<double>)>;
 using DataStructure = std::map<unsigned,std::vector<double>>;
-
+//@note some comments con be of help....
+//@note In a header file you do not put function definitions, only declarations!
+// The definition goes in the source file
+// There are exceptions: templates, inline functions etc. but this is an ordinary function 
+// so it should be declared here and defined in the source file
+// Concerning the code. It is fine but a bit combersome and probably less effiecient than it could be
+// Normally what you do is to create a buffer or rows, i.e. each rank has a buffer of nrows+2 rows, and the budder is updated
+// with the ghost rows from the neighbouring ranks, a parte the first and last rank that use the ghost rows to stora boundary data. 
+// This way you can streamline the computation better.   
 bool laplaceSolver(const unsigned max_it,const double a, const double b, const double tol, const unsigned npoints, const double bc, fun_type f){
 
-    const double h = (b-a)/((double)(npoints-1)); //distance between each point of the grid
+    const double h = (b-a)/((double)(npoints-1)); //distance between each point of the grid @avoid c-style casts
 
     unsigned k = 0; //number of iterations
 
@@ -30,6 +39,7 @@ bool laplaceSolver(const unsigned max_it,const double a, const double b, const d
     unsigned remainder = npoints % size;
 
     if(remainder != 0){ //if remainder is non-zero, add one row to each rank until we reach the desired number of elements
+    //@note you have an utility to do that, 
         for(unsigned i = 0; i< size && remainder != 0; ++i){
             if(rank == i){
                 ++nrows;
